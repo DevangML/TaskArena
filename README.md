@@ -15,7 +15,7 @@ TaskArena SaaS installs a background worker service that orchestrates Claude CLI
 ## Quick start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<YOUR_GH_USER>/taskarena-saas/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/DevangML/taskarena-saas/main/install.sh | bash
 ```
 
 After installation the `ta` command is ready:
