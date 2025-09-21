@@ -28,6 +28,30 @@ ta . "Refactor the parser to stream tokens"
 ta ~/projects/app "Add README badges"
 ```
 
+### Configure Claude CLI discovery
+
+TaskArena resolves the Claude CLI by checking the `CLAUDE_CLI` environment
+variable, the current `PATH`, and `~/.local/bin/claude`. If the service
+starts before `claude` is available on those locations, set `CLAUDE_CLI` to
+the full executable path (e.g. `export CLAUDE_CLI=/usr/local/bin/claude`) and
+restart the TaskArena service.
+
+### Visualize job progress
+
+Stream TaskArena job activity as a chat-style transcript by piping the `progress.sh`
+helper through `bash`. The script reads from the local `~/.taskarena/` queue and
+artifact directories, so it can be run on the same machine where the service is
+processing jobs:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/DevangML/TaskArena/main/progress.sh | bash -s -- <job-id>
+```
+
+Replace `<job-id>` with the identifier returned when submitting a job (printed by
+`ta` as part of the JSON response). The viewer polls for status transitions, displays
+the merged prompt and repository path, and streams planner/applier outputs as
+color-coded chat messages until the job completes.
+
 ## Runtime layout
 
 ```

@@ -6,6 +6,7 @@ import hashlib
 import http.server
 import json
 import os
+import shutil
 import subprocess
 import threading
 import time
@@ -67,6 +68,7 @@ Follow the approved plan. Explain the changes you make and ensure artifacts are 
 _LOG_LOCK = threading.Lock()
 _QUEUE_LOCK = threading.Lock()
 _SUPPORTS_CACHE: Optional[bool] = None
+_CLAUDE_PATH: Optional[str] = None
 
 
 def ensure_directories() -> None:
@@ -150,14 +152,52 @@ def combined_rules(repo: Path) -> str:
     return host or agents or "No additional rules available."
 
 
+def _resolve_claude_cli() -> str:
+    """Locate the Claude CLI executable, caching the discovered path."""
+
+    global _CLAUDE_PATH
+    if _CLAUDE_PATH:
+        return _CLAUDE_PATH
+
+    candidates: list[Path] = []
+
+    override = os.environ.get("CLAUDE_CLI")
+    if override:
+        candidates.append(Path(override).expanduser())
+
+    which_path = shutil.which("claude")
+    if which_path:
+        candidates.append(Path(which_path))
+
+    candidates.append(Path.home() / ".local/bin/claude")
+
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if not candidate:
+            continue
+        resolved = candidate.expanduser().resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if resolved.exists() and os.access(resolved, os.X_OK):
+            _CLAUDE_PATH = str(resolved)
+            return _CLAUDE_PATH
+
+    raise RuntimeError(
+        "Claude CLI executable not found. Install the `claude` command, add it to your PATH, "
+        "or set CLAUDE_CLI to its full path before starting TaskArena."
+    )
+
+
 def _detect_supports_dash_p() -> bool:
     global _SUPPORTS_CACHE
     if _SUPPORTS_CACHE is not None:
         return _SUPPORTS_CACHE
     try:
-        result = subprocess.run(["claude", "--help"], capture_output=True, text=True, timeout=10)
-    except FileNotFoundError as exc:
-        raise RuntimeError("Claude CLI is not installed. Install the claude CLI to process jobs.") from exc
+        claude_cli = _resolve_claude_cli()
+        result = subprocess.run([claude_cli, "--help"], capture_output=True, text=True, timeout=10)
+    except RuntimeError:
+        raise
     except Exception:
         _SUPPORTS_CACHE = False
         return _SUPPORTS_CACHE
@@ -174,15 +214,16 @@ def run_plan(repo: Path, prompt: str, job_id: str) -> tuple[subprocess.Completed
     rules_text = combined_rules(repo)
     plan_prompt = _PLAN_TEMPLATE.format(job_id=job_id, repo=str(repo), prompt=prompt, rules=rules_text)
     supports_dash = _detect_supports_dash_p()
+    claude_cli = _resolve_claude_cli()
     if supports_dash:
-        proc = _run_subprocess(["claude", "-p", plan_prompt])
+        proc = _run_subprocess([claude_cli, "-p", plan_prompt])
         return proc, rules_text
     with NamedTemporaryFile("w", encoding="utf-8", delete=False, suffix=".md") as handle:
         handle.write(plan_prompt)
         handle.flush()
         temp_path = handle.name
     try:
-        proc = _run_subprocess(["claude", "code", "plan", "--repo", str(repo), "--plan", temp_path])
+        proc = _run_subprocess([claude_cli, "code", "plan", "--repo", str(repo), "--plan", temp_path])
     finally:
         try:
             os.unlink(temp_path)
@@ -195,14 +236,15 @@ def run_apply(repo: Path, prompt: str, job_id: str, rules_text: str, plan_output
     approved_plan = plan_output.strip() or "Plan output missing."
     apply_prompt = _APPLY_TEMPLATE.format(job_id=job_id, repo=str(repo), rules=rules_text, plan=approved_plan, prompt=prompt)
     supports_dash = _detect_supports_dash_p()
+    claude_cli = _resolve_claude_cli()
     if supports_dash:
-        return _run_subprocess(["claude", "-p", apply_prompt])
+        return _run_subprocess([claude_cli, "-p", apply_prompt])
     with NamedTemporaryFile("w", encoding="utf-8", delete=False, suffix=".md") as handle:
         handle.write(apply_prompt)
         handle.flush()
         temp_path = handle.name
     try:
-        return _run_subprocess(["claude", "code", "apply", "--repo", str(repo), "--plan", temp_path])
+        return _run_subprocess([claude_cli, "code", "apply", "--repo", str(repo), "--plan", temp_path])
     finally:
         try:
             os.unlink(temp_path)
