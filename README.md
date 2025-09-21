@@ -28,14 +28,6 @@ ta . "Refactor the parser to stream tokens"
 ta ~/projects/app "Add README badges"
 ```
 
-### Configure Claude CLI discovery
-
-TaskArena resolves the Claude CLI by checking the `CLAUDE_CLI` environment
-variable, the current `PATH`, and `~/.local/bin/claude`. If the service
-starts before `claude` is available on those locations, set `CLAUDE_CLI` to
-the full executable path (e.g. `export CLAUDE_CLI=/usr/local/bin/claude`) and
-restart the TaskArena service.
-
 ### Visualize job progress
 
 Stream TaskArena job activity as a chat-style transcript by piping the `progress.sh`
