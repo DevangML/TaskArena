@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+"""TaskArena SaaS CLI helper."""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+API_URL = "http://127.0.0.1:8787/jobs"
+
+
+def send_job(directory: Path, prompt: str) -> dict:
+    payload = json.dumps({"dir": str(directory), "prompt": prompt}).encode("utf-8")
+    request = urllib.request.Request(API_URL, data=payload, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310
+        data = response.read()
+    return json.loads(data.decode("utf-8"))
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Submit a TaskArena job to the local service")
+    parser.add_argument("directory", help="Path to the project directory")
+    parser.add_argument("prompt", nargs=argparse.REMAINDER, help="Task prompt to execute")
+    args = parser.parse_args()
+
+    if not args.prompt:
+        parser.error("prompt is required")
+
+    target = Path(args.directory).expanduser().resolve()
+    if not target.exists() or not target.is_dir():
+        parser.error(f"directory does not exist: {target}")
+
+    prompt = " ".join(args.prompt).strip()
+    if not prompt:
+        parser.error("prompt is required")
+
+    try:
+        result = send_job(target, prompt)
+    except urllib.error.URLError as exc:  # pragma: no cover - network error handling
+        print(f"error: could not reach TaskArena service at {API_URL}: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:  # pragma: no cover
+        print(f"error: unexpected failure submitting job: {exc}", file=sys.stderr)
+        return 1
+
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
