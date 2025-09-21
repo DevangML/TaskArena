@@ -2,7 +2,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_URL="https://raw.githubusercontent.com/<YOUR_GH_USER>/taskarena-saas/main"
+# Allow overriding the base download URL (useful for forks or mirrors)
+DEFAULT_BASE_URL="https://raw.githubusercontent.com/DevangML/TaskArena/main"
+BASE_URL="${TASKARENA_BASE_URL:-${DEFAULT_BASE_URL}}"
 STATE_DIR="${HOME}/.taskarena"
 BIN_DIR="${HOME}/.local/bin"
 QUEUE_DIRS=("queue/inbox" "queue/running" "queue/done" "queue/failed")
